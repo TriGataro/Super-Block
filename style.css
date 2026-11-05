@@ -107,14 +107,104 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
-/* Contenedor del canvas de Phaser */
-#contenedor-juego {
+/* Escenario: joystick a la izquierda, juego al centro, salto a la derecha */
+#escenario {
   flex: 1 1 auto;
   min-height: 0;
-  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "joy juego salto";
+}
+
+#zona-joystick { grid-area: joy; }
+#contenedor-juego { grid-area: juego; }
+#zona-salto { grid-area: salto; }
+
+/* Contenedor del canvas de Phaser */
+#contenedor-juego {
+  min-width: 0;
+  min-height: 0;
   position: relative;
   overflow: hidden;
   touch-action: none;
+}
+
+/* Paneles táctiles: solo se muestran en dispositivos con pantalla táctil */
+.zona-tactil {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: clamp(100px, 17vw, 170px);
+  padding: 8px;
+  background: var(--barra);
+  touch-action: none;
+}
+
+body.tactil .zona-tactil {
+  display: flex;
+}
+
+/* Joystick virtual */
+#joy-base {
+  --tam-joy: clamp(84px, 14vw, 140px);
+  position: relative;
+  width: var(--tam-joy);
+  height: var(--tam-joy);
+  border: 3px solid var(--acento);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#joy-base.activo {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+#joy-perilla {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 42%;
+  height: 42%;
+  margin: -21% 0 0 -21%;
+  border-radius: 50%;
+  background: var(--acento);
+  opacity: 0.85;
+  transform: translate(var(--dx, 0px), var(--dy, 0px));
+  pointer-events: none;
+}
+
+/* Botón de salto */
+#btn-saltar {
+  width: clamp(84px, 14vw, 140px);
+  height: clamp(84px, 14vw, 140px);
+  padding: 0;
+  border-radius: 50%;
+  border-width: 3px;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  touch-action: none;
+}
+
+#btn-saltar.activo {
+  filter: brightness(1.3);
+  transform: scale(0.94);
+}
+
+/* Celular en vertical: los paneles pasan debajo del juego, izquierda y derecha */
+@media (orientation: portrait) {
+  #escenario {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "juego juego"
+      "joy salto";
+  }
+
+  .zona-tactil {
+    width: auto;
+    padding: 12px;
+  }
 }
 
 #contenedor-juego canvas {

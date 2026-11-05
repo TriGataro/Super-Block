@@ -1450,12 +1450,6 @@ class Interfaz extends Phaser.Scene {
     // Panel de pausa
     this.crearPanelPausa();
 
-    // Controles táctiles (solo en dispositivos con pantalla táctil)
-    this.tactil = this.sys.game.device.input.touch;
-    this.joyId = null;
-    this.saltoId = null;
-    if (this.tactil) this.crearControlesTactiles();
-
     // Teclas de pausa y menú
     this.input.keyboard.on('keydown-P', () => this.alternarPausa());
     this.input.keyboard.on('keydown-ESC', () => this.alternarPausa());
@@ -1532,71 +1526,6 @@ class Interfaz extends Phaser.Scene {
     this.scene.stop('Juego');
     this.scene.start('Menu');
     this.scene.stop();
-  }
-
-  /* ---------- Joystick virtual y botón de salto ---------- */
-
-  crearControlesTactiles() {
-    this.input.addPointer(2);               // permite varios dedos a la vez
-    this.joyBaseX = 110;
-    this.joyBaseY = 350;
-
-    this.joyBase = this.add.circle(this.joyBaseX, this.joyBaseY, 56, 0xffffff, 0.15).setStrokeStyle(3, 0xffffff, 0.5);
-    this.joyKnob = this.add.circle(this.joyBaseX, this.joyBaseY, 26, 0xffffff, 0.4);
-    this.botonSalto = this.add.circle(700, 350, 46, 0xffffff, 0.2).setStrokeStyle(3, 0xffffff, 0.6);
-    this.add.text(700, 350, 'SALTAR', {
-      fontFamily: FUENTE, fontSize: '14px', fontStyle: 'bold', color: '#ffffff'
-    }).setOrigin(0.5);
-
-    this.input.on('pointerdown', (p) => {
-      if (p.y < 56) return;                  // zona de los botones superiores
-      if (p.x < ANCHO_PANTALLA / 2) {
-        if (this.joyId === null) {
-          this.joyId = p.id;
-          // El joystick aparece donde el dedo toca (dentro de la zona izquierda)
-          this.joyBaseX = Phaser.Math.Clamp(p.x, 70, 330);
-          this.joyBaseY = Phaser.Math.Clamp(p.y, 170, 400);
-          this.joyBase.setPosition(this.joyBaseX, this.joyBaseY).setAlpha(0.9);
-          this.moverJoystick(p);
-        }
-      } else if (this.saltoId === null) {
-        this.saltoId = p.id;
-        ENTRADA.salto = true;
-        this.botonSalto.setFillStyle(0xffffff, 0.5);
-      }
-    });
-
-    this.input.on('pointermove', (p) => {
-      if (p.id === this.joyId) this.moverJoystick(p);
-    });
-
-    const soltar = (p) => {
-      if (p.id === this.joyId) {
-        this.joyId = null;
-        ENTRADA.x = 0;
-        this.joyBaseX = 110;
-        this.joyBaseY = 350;
-        this.joyBase.setPosition(110, 350).setAlpha(1);
-        this.joyKnob.setPosition(110, 350);
-      }
-      if (p.id === this.saltoId) {
-        this.saltoId = null;
-        ENTRADA.salto = false;
-        this.botonSalto.setFillStyle(0xffffff, 0.2);
-      }
-    };
-    this.input.on('pointerup', soltar);
-    this.input.on('pointerupoutside', soltar);
-  }
-
-  // Calcula la dirección según el desplazamiento del dedo
-  moverJoystick(p) {
-    const dx = p.x - this.joyBaseX;
-    const dy = p.y - this.joyBaseY;
-    const dist = Math.min(Math.hypot(dx, dy), 56);
-    const ang = Math.atan2(dy, dx);
-    this.joyKnob.setPosition(this.joyBaseX + Math.cos(ang) * dist, this.joyBaseY + Math.sin(ang) * dist);
-    ENTRADA.x = Math.abs(dx) < 10 ? 0 : Phaser.Math.Clamp(dx / 40, -1, 1);
   }
 
   /* ---------- Actualización del HUD ---------- */
@@ -1701,6 +1630,82 @@ class Fin extends Phaser.Scene {
 }
 
 /* ==================================================================
+   CONTROLES TÁCTILES FUERA DE LA PANTALLA DEL JUEGO
+   El joystick virtual queda a la izquierda y el botón de salto a la
+   derecha del juego (paneles HTML, no dibujados dentro del canvas).
+   ================================================================== */
+function esDispositivoTactil() {
+  return ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+}
+
+function configurarControlesTactiles() {
+  if (!esDispositivoTactil()) return;
+  // Esta clase hace visibles los paneles laterales (ver style.css)
+  document.body.classList.add('tactil');
+
+  const zonaJoy = document.getElementById('zona-joystick');
+  const base = document.getElementById('joy-base');
+  const perilla = document.getElementById('joy-perilla');
+  const botonSalto = document.getElementById('btn-saltar');
+  let idJoy = null;                       // dedo que controla el joystick
+
+  // Calcula la dirección según el desplazamiento del dedo respecto al centro
+  const mover = (e) => {
+    const r = base.getBoundingClientRect();
+    const radio = r.width / 2;
+    const dx = e.clientX - (r.left + radio);
+    const dy = e.clientY - (r.top + r.height / 2);
+    const dist = Math.min(Math.hypot(dx, dy), radio * 0.7);
+    const ang = Math.atan2(dy, dx);
+    // La perilla se mueve mediante variables CSS definidas en style.css
+    perilla.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    perilla.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+    ENTRADA.x = Math.abs(dx) < radio * 0.2 ? 0 : Math.max(-1, Math.min(1, dx / (radio * 0.6)));
+  };
+
+  // Devuelve el joystick al centro y detiene el movimiento
+  const soltarJoy = (e) => {
+    if (e.pointerId !== idJoy) return;
+    idJoy = null;
+    ENTRADA.x = 0;
+    perilla.style.setProperty('--dx', '0px');
+    perilla.style.setProperty('--dy', '0px');
+    base.classList.remove('activo');
+  };
+
+  zonaJoy.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (idJoy !== null) return;
+    idJoy = e.pointerId;
+    zonaJoy.setPointerCapture(e.pointerId);
+    base.classList.add('activo');
+    mover(e);
+  });
+  zonaJoy.addEventListener('pointermove', (e) => { if (e.pointerId === idJoy) mover(e); });
+  zonaJoy.addEventListener('pointerup', soltarJoy);
+  zonaJoy.addEventListener('pointercancel', soltarJoy);
+
+  // Botón de salto: se mantiene pulsado para saltar más alto
+  let idSalto = null;
+  const soltarSalto = (e) => {
+    if (e.pointerId !== idSalto) return;
+    idSalto = null;
+    ENTRADA.salto = false;
+    botonSalto.classList.remove('activo');
+  };
+  botonSalto.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (idSalto !== null) return;
+    idSalto = e.pointerId;
+    botonSalto.setPointerCapture(e.pointerId);
+    ENTRADA.salto = true;
+    botonSalto.classList.add('activo');
+  });
+  botonSalto.addEventListener('pointerup', soltarSalto);
+  botonSalto.addEventListener('pointercancel', soltarSalto);
+}
+
+/* ==================================================================
    INICIO DEL JUEGO
    ================================================================== */
 function iniciar() {
@@ -1708,6 +1713,7 @@ function iniciar() {
   cargar();
   aplicarTemaPagina();
   bloquearSeleccion();
+  configurarControlesTactiles();
 
   // Botones de la barra superior
   document.getElementById('btn-compartir').addEventListener('click', compartir);

@@ -21,8 +21,19 @@
   <!-- Aviso para celulares en vertical -->
   <div id="aviso-giro">📱 Gira tu dispositivo para jugar mejor</div>
 
-  <!-- Aquí Phaser dibuja el juego -->
-  <main id="contenedor-juego"></main>
+  <!-- Escenario: joystick (izquierda) | juego | botón de salto (derecha) -->
+  <div id="escenario">
+    <aside id="zona-joystick" class="zona-tactil" aria-label="Joystick virtual">
+      <div id="joy-base"><div id="joy-perilla"></div></div>
+    </aside>
+
+    <!-- Aquí Phaser dibuja el juego -->
+    <main id="contenedor-juego"></main>
+
+    <aside id="zona-salto" class="zona-tactil" aria-label="Botón de salto">
+      <button id="btn-saltar" type="button">SALTAR</button>
+    </aside>
+  </div>
 
   <!-- Mensajes breves (compartir, tema, mando conectado) -->
   <div id="toast" role="status" aria-live="polite"></div>
