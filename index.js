@@ -259,6 +259,49 @@ function bloquearSeleccion() {
   });
 }
 
+// Evita que la página se acerque (zoom) en celulares.
+// El meta viewport con "user-scalable=no" lo ignoran iOS Safari y algunos
+// navegadores de Android, así que el zoom también se bloquea por código.
+function bloquearZoom() {
+  // Pellizcar con dos dedos en iOS (Safari lanza eventos "gesture")
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((ev) => {
+    document.addEventListener(ev, (e) => e.preventDefault());
+  });
+
+  // Pellizcar con dos dedos en el resto de navegadores
+  document.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+
+  // Doble toque rápido (por ejemplo, al pulsar SALTAR muy seguido)
+  const escenario = document.getElementById('escenario');
+  let ultimoToque = 0;
+  escenario.addEventListener('touchend', (e) => {
+    const ahora = Date.now();
+    if (ahora - ultimoToque < 350) e.preventDefault();
+    ultimoToque = ahora;
+  }, { passive: false });
+}
+
+// Recalcula el tamaño del juego cuando cambia el espacio disponible:
+// al girar el celular o cuando la barra del navegador aparece o se oculta.
+function vigilarTamano() {
+  let pendiente = null;
+  const refrescar = () => {
+    clearTimeout(pendiente);
+    // Se espera un instante porque, al girar, el navegador tarda en
+    // actualizar sus medidas y Phaser leería valores viejos.
+    pendiente = setTimeout(() => {
+      if (juego && juego.scale) juego.scale.refresh();
+    }, 150);
+  };
+  window.addEventListener('resize', refrescar);
+  window.addEventListener('orientationchange', refrescar);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', refrescar);
+  }
+}
+
 /* ------------------------------------------------------------------
    TEXTURAS (todo se dibuja con rectángulos, sin imágenes externas)
    ------------------------------------------------------------------ */
@@ -1713,6 +1756,7 @@ function iniciar() {
   cargar();
   aplicarTemaPagina();
   bloquearSeleccion();
+  bloquearZoom();
   configurarControlesTactiles();
 
   // Botones de la barra superior
@@ -1739,6 +1783,8 @@ function iniciar() {
     input: { gamepad: true },
     scene: [Arranque, Menu, Juego, Interfaz, Fin]
   });
+
+  vigilarTamano();
 }
 
 iniciar();
