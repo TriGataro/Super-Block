@@ -1,0 +1,220 @@
+/* ============================================================
+   Cuadro Bros - estilos
+   Los temas de color se controlan con variables CSS y el
+   atributo data-tema del elemento <html>.
+   ============================================================ */
+
+/* Tema clásico (por defecto) */
+:root {
+  --fondo: #1e2a78;
+  --barra: #12194d;
+  --texto: #ffffff;
+  --acento: #ffd54a;
+  --boton: #e52521;
+  --boton-texto: #ffffff;
+}
+
+/* Tema oscuro: menos brillo, descansa la vista */
+[data-tema="oscuro"] {
+  --fondo: #0b0b12;
+  --barra: #000000;
+  --texto: #d9dbe6;
+  --acento: #7cc4ff;
+  --boton: #2a3a5a;
+  --boton-texto: #e8ecff;
+}
+
+/* Tema de alto contraste: máxima legibilidad */
+[data-tema="contraste"] {
+  --fondo: #000000;
+  --barra: #000000;
+  --texto: #ffffff;
+  --acento: #ffff00;
+  --boton: #ffff00;
+  --boton-texto: #000000;
+}
+
+/* Bloquea seleccionar, copiar y pegar en toda la página */
+* {
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Columna: barra, juego y pie de página */
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* Barra superior */
+.barra {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--barra);
+  border-bottom: 3px solid var(--acento);
+}
+
+.barra h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--acento);
+}
+
+.acciones {
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 12px;
+  border: 2px solid var(--acento);
+  border-radius: 6px;
+  background: var(--boton);
+  color: var(--boton-texto);
+  cursor: pointer;
+}
+
+button:hover,
+button:focus-visible {
+  filter: brightness(1.15);
+  outline: 2px solid var(--texto);
+  outline-offset: 2px;
+}
+
+/* Contenedor del canvas de Phaser */
+#contenedor-juego {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+}
+
+#contenedor-juego canvas {
+  display: block;
+  touch-action: none;
+  image-rendering: pixelated;
+}
+
+/* Aviso de giro (solo celulares en vertical) */
+#aviso-giro {
+  display: none;
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--acento);
+  color: #000000;
+}
+
+@media (orientation: portrait) and (max-width: 700px) {
+  #aviso-giro {
+    display: block;
+  }
+}
+
+/* Mensajes breves */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%) translateY(20px);
+  max-width: 90vw;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: var(--acento);
+  color: #000000;
+  font-weight: 700;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 10;
+}
+
+#toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Pie de página */
+footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--barra);
+  border-top: 3px solid var(--acento);
+  font-size: 0.85rem;
+}
+
+footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--acento);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+footer a:hover,
+footer a:focus-visible {
+  text-decoration: underline;
+}
+
+/* Pantallas bajas (celular en horizontal): barras más compactas */
+@media (max-height: 520px) {
+  .barra {
+    padding: 2px 10px;
+    border-bottom-width: 2px;
+  }
+
+  .barra h1 {
+    font-size: 0.9rem;
+  }
+
+  button {
+    padding: 3px 8px;
+    font-size: 0.8rem;
+  }
+
+  footer {
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    border-top-width: 2px;
+  }
+
+  #toast {
+    bottom: 36px;
+  }
+}
