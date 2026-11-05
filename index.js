@@ -26,8 +26,14 @@ const FUENTE = '"Courier New", Courier, monospace';
 let guardado = { nivelMax: 0, mejor: 0, tema: 'clasico', silencio: false };
 let almacenamientoOk = true;
 
+// Zoom de la cámara del nivel (botones 🔍+ y 🔍− de la barra superior)
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_PASO = 0.25;
+let zoomJuego = 1;
+
 // Datos de la partida en curso
-let partida = { puntos: 0, monedas: 0, vidas: 3, grande: false };
+let partida ={ puntos: 0, monedas: 0, vidas: 3, grande: false };
 
 // Entrada táctil compartida entre la interfaz y el juego
 const ENTRADA = { x: 0, salto: false };
@@ -281,6 +287,24 @@ function bloquearZoom() {
     if (ahora - ultimoToque < 350) e.preventDefault();
     ultimoToque = ahora;
   }, { passive: false });
+}
+
+// Acerca (paso > 0) o aleja (paso < 0) la cámara del nivel.
+// El valor se recuerda para los niveles siguientes.
+function cambiarZoom(paso) {
+  const nuevo = Math.round(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomJuego + paso)) * 100) / 100;
+  if (nuevo === zoomJuego) {
+    mostrarAviso(paso > 0 ? 'Zoom máximo' : 'Zoom mínimo');
+    return;
+  }
+  zoomJuego = nuevo;
+  if (juego && juego.scene) {
+    const escena = juego.scene.getScene('Juego');
+    if (escena && escena.sys.isActive() && escena.cameras && escena.cameras.main) {
+      escena.cameras.main.setZoom(zoomJuego);
+    }
+  }
+  mostrarAviso('Zoom: ' + Math.round(zoomJuego * 100) + '%');
 }
 
 // Recalcula el tamaño del juego cuando cambia el espacio disponible:
@@ -850,6 +874,7 @@ class Juego extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.setBounds(0, 0, this.anchoPx, ALTO_PANTALLA);
     cam.startFollow(this.jugador, true, 0.1, 0.1);
+    cam.setZoom(zoomJuego);
 
     // Controles de teclado (flechas y W, A, S, D)
     this.cursores = this.input.keyboard.createCursorKeys();
@@ -1762,6 +1787,8 @@ function iniciar() {
   // Botones de la barra superior
   document.getElementById('btn-compartir').addEventListener('click', compartir);
   document.getElementById('btn-tema').addEventListener('click', siguienteTema);
+  document.getElementById('btn-acercar').addEventListener('click', () => cambiarZoom(ZOOM_PASO));
+  document.getElementById('btn-alejar').addEventListener('click', () => cambiarZoom(-ZOOM_PASO));
 
   juego = new Phaser.Game({
     type: Phaser.AUTO,
