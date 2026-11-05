@@ -1785,10 +1785,15 @@ function iniciar() {
   configurarControlesTactiles();
 
   // Botones de la barra superior
-  document.getElementById('btn-compartir').addEventListener('click', compartir);
-  document.getElementById('btn-tema').addEventListener('click', siguienteTema);
-  document.getElementById('btn-acercar').addEventListener('click', () => cambiarZoom(ZOOM_PASO));
-  document.getElementById('btn-alejar').addEventListener('click', () => cambiarZoom(-ZOOM_PASO));
+  const btnCompartir = document.getElementById('btn-compartir');
+  const btnTema = document.getElementById('btn-tema');
+  const btnAcercar = document.getElementById('btn-acercar');
+  const btnAlejar = document.getElementById('btn-alejar');
+
+  if (btnCompartir) btnCompartir.addEventListener('click', compartir);
+  if (btnTema) btnTema.addEventListener('click', siguienteTema);
+  if (btnAcercar) btnAcercar.addEventListener('click', () => cambiarZoom(ZOOM_PASO));
+  if (btnAlejar) btnAlejar.addEventListener('click', () => cambiarZoom(-ZOOM_PASO));
 
   juego = new Phaser.Game({
     type: Phaser.AUTO,
