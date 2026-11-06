@@ -798,20 +798,37 @@ function construirMapa(def) {
   return { filas, huecos };
 }
 
-// Botón de texto centrado, usado en el menú y en la pantalla final.
+// Botón de texto centrado, usado en el menú, la pausa y la pantalla final.
 // translucido: fondo negro semitransparente que se resalta al pasar el puntero;
-// si no, fondo rojo sólido.
+// si no, es un botón grande de fondo rojo (pausa y fin del juego), pensado
+// para tocarse fácilmente con el dedo.
 function crearBotonTexto(escena, y, texto, accion, translucido) {
   const b = escena.add.text(400, y, texto, {
-    fontFamily: FUENTE, fontSize: translucido ? '24px' : '22px', fontStyle: 'bold',
+    fontFamily: FUENTE, fontSize: translucido ? '24px' : '32px', fontStyle: 'bold',
     color: '#ffffff', backgroundColor: translucido ? '#000000aa' : '#e52521',
-    padding: { x: 16, y: 8 }
-  }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    padding: translucido ? { x: 16, y: 8 } : { x: 28, y: 14 }
+  }).setOrigin(0.5);
+
+  // Zona sensible ampliada 12 px por cada lado: más fácil de acertar con el dedo
+  const margen = 12;
+  b.setInteractive({
+    hitArea: new Phaser.Geom.Rectangle(-margen, -margen, b.width + margen * 2, b.height + margen * 2),
+    hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+    useHandCursor: true
+  });
+
   if (translucido) {
     b.on('pointerover', () => b.setColor('#ffd54a'));
     b.on('pointerout', () => b.setColor('#ffffff'));
+  } else {
+    // Efecto de pulsado: el botón se encoge mientras se mantiene el toque
+    b.on('pointerout', () => b.setScale(1));
+    b.on('pointerup', () => b.setScale(1));
   }
-  b.on('pointerdown', accion);
+  b.on('pointerdown', () => {
+    if (!translucido) b.setScale(0.95);
+    accion();
+  });
   return b;
 }
 
@@ -1637,16 +1654,8 @@ class Interfaz extends Phaser.Scene {
   crearPanelPausa() {
     const fondo = this.add.rectangle(400, 224, 800, 448, 0x000000, 0.65);
     const titulo = this.add.text(400, 150, 'PAUSA', estiloTexto(48, { strokeThickness: 7 })).setOrigin(0.5);
-    const estiloBoton = {
-      fontFamily: FUENTE, fontSize: '24px', fontStyle: 'bold', color: '#ffffff',
-      backgroundColor: '#e52521', padding: { x: 16, y: 8 }
-    };
-    const seguir = this.add.text(400, 235, 'CONTINUAR' + atajo('P'), estiloBoton).setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    const menu = this.add.text(400, 295, 'MENÚ' + atajo('M'), estiloBoton).setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    seguir.on('pointerdown', () => this.alternarPausa());
-    menu.on('pointerdown', () => irAlMenuPrincipal());
+    const seguir = crearBotonTexto(this, 235, 'CONTINUAR' + atajo('P'), () => this.alternarPausa(), false);
+    const menu = crearBotonTexto(this, 325, 'MENÚ' + atajo('M'), () => irAlMenuPrincipal(), false);
 
     this.panel = this.add.container(0, 0, [fondo, titulo, seguir, menu]).setDepth(100).setVisible(false);
   }
@@ -1740,8 +1749,8 @@ class Fin extends Phaser.Scene {
 
     // Botones
     const etiqueta = this.ganado ? '▶ JUGAR DE NUEVO' : '▶ REINTENTAR NIVEL ' + (this.nivelPerdido + 1);
-    crearBotonTexto(this, 310, etiqueta + atajo('Enter'), () => this.reintentar(), false);
-    crearBotonTexto(this, 365, 'MENÚ' + atajo('M'), () => this.scene.start('Menu'), false);
+    crearBotonTexto(this, 305, etiqueta + atajo('Enter'), () => this.reintentar(), false);
+    crearBotonTexto(this, 390, 'MENÚ' + atajo('M'), () => this.scene.start('Menu'), false);
 
     this.input.keyboard.on('keydown-ENTER', () => this.reintentar());
     this.input.keyboard.on('keydown-M', () => this.scene.start('Menu'));
