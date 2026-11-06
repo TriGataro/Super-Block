@@ -353,13 +353,19 @@ function cambiarZoom(paso) {
 /* ------------------------------------------------------------------
    BOTONES MENÚ Y REINICIAR (HTML, flotantes en celular)
    ------------------------------------------------------------------ */
-// Indica en qué pantalla está el juego ('menu', 'juego' o 'fin') y activa
-// o desactiva los botones según corresponda
+// Indica en qué pantalla está el juego ('menu', 'juego' o 'fin'), activa o
+// desactiva el botón Menú y cambia el botón Jugar / Reintentar
 function marcarEscena(estado) {
   const btnMenu = document.getElementById('btn-menu');
-  const btnReiniciar = document.getElementById('btn-reiniciar');
+  const btnJugar = document.getElementById('btn-jugar');
   if (btnMenu) btnMenu.disabled = estado === 'menu';
-  if (btnReiniciar) btnReiniciar.disabled = estado !== 'juego';
+  if (!btnJugar) return;
+  const reintentar = estado !== 'menu';
+  const texto = reintentar ? 'Reintentar' : 'Jugar';
+  document.getElementById('jugar-icono').textContent = reintentar ? '↻' : '▶';
+  document.getElementById('jugar-texto').textContent = ' ' + texto;
+  btnJugar.setAttribute('aria-label', texto);
+  btnJugar.title = texto;
 }
 
 // Cierra lo que esté en marcha y vuelve al menú principal
@@ -371,13 +377,22 @@ function irAlMenuPrincipal() {
   juego.scene.start('Menu');
 }
 
-// Vuelve a empezar el nivel actual con una partida nueva
-function reiniciarNivelActual() {
+// Botón Jugar / Reintentar: en el menú empieza una partida; durante el juego
+// o en la pantalla final vuelve a empezar el nivel con una partida nueva
+function jugarOReintentar() {
   if (!juego) return;
-  const escena = juego.scene.getScene('Juego');
-  if (!escena || !(escena.sys.isActive() || escena.sys.isPaused())) return;
-  reiniciarPartida();
-  juego.scene.start('Juego', { nivel: escena.indice });
+  const sc = juego.scene;
+  const enJuego = sc.getScene('Juego');
+  const enFin = sc.getScene('Fin');
+  if (enJuego && (enJuego.sys.isActive() || enJuego.sys.isPaused())) {
+    reiniciarPartida();
+    sc.start('Juego', { nivel: enJuego.indice });
+  } else if (enFin && enFin.sys.isActive()) {
+    enFin.reintentar();
+  } else {
+    reiniciarPartida();
+    sc.start('Juego', { nivel: 0 });
+  }
 }
 
 // Atajos de mando: avisa al conectar y desconectar un joystick
@@ -1834,7 +1849,7 @@ function iniciar() {
     'btn-acercar': () => cambiarZoom(ZOOM_PASO),
     'btn-alejar': () => cambiarZoom(-ZOOM_PASO),
     'btn-menu': irAlMenuPrincipal,
-    'btn-reiniciar': reiniciarNivelActual
+    'btn-jugar': jugarOReintentar
   };
   Object.keys(acciones).forEach((id) => {
     const boton = document.getElementById(id);
