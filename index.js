@@ -33,7 +33,7 @@ const ZOOM_PASO = 0.25;
 let zoomJuego = 1;
 
 // Datos de la partida en curso
-let partida ={ puntos: 0, monedas: 0, vidas: 3, grande: false };
+let partida = { puntos: 0, monedas: 0, vidas: 3, grande: false };
 
 // Entrada táctil compartida entre la interfaz y el juego
 const ENTRADA = { x: 0, salto: false };
@@ -76,6 +76,19 @@ const TEMAS = {
 // Oscurece / aclara un color entero (porcentaje 0-100)
 const tono = (c, p) => Phaser.Display.Color.IntegerToColor(c).darken(p).color;
 const aclarar = (c, p) => Phaser.Display.Color.IntegerToColor(c).lighten(p).color;
+
+// Estilo de texto del juego (fuente monoespaciada con contorno negro)
+function estiloTexto(tam, extra) {
+  return Object.assign({
+    fontFamily: FUENTE, fontSize: tam + 'px', fontStyle: 'bold',
+    color: '#ffffff', stroke: '#000000', strokeThickness: Math.max(4, Math.round(tam / 8))
+  }, extra);
+}
+
+// Texto de atajo de teclado: en pantallas táctiles no tiene sentido mostrarlo
+function atajo(tecla) {
+  return esDispositivoTactil() ? '' : '  (' + tecla + ')';
+}
 
 // Borde de las figuras: blanco en alto contraste, más oscuro en el resto
 const borde = (c) => (guardado.tema === 'contraste' ? 0xffffff : tono(c, 35));
@@ -123,11 +136,20 @@ const SONIDOS = {
 };
 let audioCtx = null;
 
-function sfx(nombre) {
-  if (guardado.silencio) return;
+// Crea (o reanuda) el contexto de audio. iOS y Chrome solo lo permiten
+// dentro de un gesto del usuario, por eso también se llama en el primer toque.
+function prepararAudio() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) { audioCtx = null; }
+  return audioCtx;
+}
+
+function sfx(nombre) {
+  if (guardado.silencio) return;
+  try {
+    if (!prepararAudio()) return;
     const cfg = SONIDOS[nombre];
     const t = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();
@@ -265,28 +287,49 @@ function bloquearSeleccion() {
   });
 }
 
-// Evita que la página se acerque (zoom) en celulares.
-// El meta viewport con "user-scalable=no" lo ignoran iOS Safari y algunos
-// navegadores de Android, así que el zoom también se bloquea por código.
+// Evita que el navegador agrande (zoom) la página.
+// El meta viewport con "user-scalable=no" y el CSS "touch-action: none" lo
+// bloquean en la mayoría de navegadores, pero iOS Safari y algunos Android
+// lo ignoran, y en computador existen la rueda con Ctrl y los atajos de
+// teclado. Por eso también se bloquea por código en cada caso.
 function bloquearZoom() {
+  const opciones = { passive: false };
+  const cancelar = (e) => e.preventDefault();
+
   // Pellizcar con dos dedos en iOS (Safari lanza eventos "gesture")
   ['gesturestart', 'gesturechange', 'gestureend'].forEach((ev) => {
-    document.addEventListener(ev, (e) => e.preventDefault());
+    document.addEventListener(ev, cancelar, opciones);
   });
 
-  // Pellizcar con dos dedos en el resto de navegadores
+  // Pellizcar con dos dedos en el resto de navegadores. Solo se cancela el
+  // gesto del navegador: el joystick y el botón de salto usan "pointer
+  // events", así que se pueden usar a la vez con dos dedos.
   document.addEventListener('touchmove', (e) => {
     if (e.touches.length > 1) e.preventDefault();
-  }, { passive: false });
+  }, opciones);
 
-  // Doble toque rápido (por ejemplo, al pulsar SALTAR muy seguido)
-  const escenario = document.getElementById('escenario');
+  // Doble toque rápido en cualquier parte de la página. Los botones se
+  // excluyen para no perder toques seguidos (por ejemplo, SALTAR o los
+  // botones de zoom de la cámara); ellos ya están cubiertos por el CSS.
   let ultimoToque = 0;
-  escenario.addEventListener('touchend', (e) => {
+  document.addEventListener('touchend', (e) => {
     const ahora = Date.now();
-    if (ahora - ultimoToque < 350) e.preventDefault();
+    const enBoton = e.target instanceof Element && e.target.closest('button');
+    if (!enBoton && ahora - ultimoToque < 350) e.preventDefault();
     ultimoToque = ahora;
-  }, { passive: false });
+  }, opciones);
+  document.addEventListener('dblclick', cancelar, opciones);
+
+  // Computador: Ctrl + rueda del ratón (o pellizco en el touchpad)
+  window.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey) e.preventDefault();
+  }, opciones);
+
+  // Computador: Ctrl/Cmd con + - = 0 (acercar, alejar y restablecer)
+  window.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (['+', '-', '=', '_', '0', 'Add', 'Subtract'].includes(e.key)) e.preventDefault();
+  }, opciones);
 }
 
 // Acerca (paso > 0) o aleja (paso < 0) la cámara del nivel.
@@ -305,6 +348,42 @@ function cambiarZoom(paso) {
     }
   }
   mostrarAviso('Zoom: ' + Math.round(zoomJuego * 100) + '%');
+}
+
+/* ------------------------------------------------------------------
+   BOTONES MENÚ Y REINICIAR (HTML, flotantes en celular)
+   ------------------------------------------------------------------ */
+// Indica en qué pantalla está el juego ('menu', 'juego' o 'fin') y activa
+// o desactiva los botones según corresponda
+function marcarEscena(estado) {
+  const btnMenu = document.getElementById('btn-menu');
+  const btnReiniciar = document.getElementById('btn-reiniciar');
+  if (btnMenu) btnMenu.disabled = estado === 'menu';
+  if (btnReiniciar) btnReiniciar.disabled = estado !== 'juego';
+}
+
+// Cierra lo que esté en marcha y vuelve al menú principal
+function irAlMenuPrincipal() {
+  if (!juego) return;
+  ['Interfaz', 'Juego', 'Fin'].forEach((clave) => {
+    if (juego.scene.isActive(clave) || juego.scene.isPaused(clave)) juego.scene.stop(clave);
+  });
+  juego.scene.start('Menu');
+}
+
+// Vuelve a empezar el nivel actual con una partida nueva
+function reiniciarNivelActual() {
+  if (!juego) return;
+  const escena = juego.scene.getScene('Juego');
+  if (!escena || !(escena.sys.isActive() || escena.sys.isPaused())) return;
+  reiniciarPartida();
+  juego.scene.start('Juego', { nivel: escena.indice });
+}
+
+// Atajos de mando: avisa al conectar y desconectar un joystick
+function vigilarMandos() {
+  window.addEventListener('gamepadconnected', () => mostrarAviso('🎮 Mando conectado'));
+  window.addEventListener('gamepaddisconnected', () => mostrarAviso('🎮 Mando desconectado'));
 }
 
 // Recalcula el tamaño del juego cuando cambia el espacio disponible:
@@ -704,6 +783,23 @@ function construirMapa(def) {
   return { filas, huecos };
 }
 
+// Botón de texto centrado, usado en el menú y en la pantalla final.
+// translucido: fondo negro semitransparente que se resalta al pasar el puntero;
+// si no, fondo rojo sólido.
+function crearBotonTexto(escena, y, texto, accion, translucido) {
+  const b = escena.add.text(400, y, texto, {
+    fontFamily: FUENTE, fontSize: translucido ? '24px' : '22px', fontStyle: 'bold',
+    color: '#ffffff', backgroundColor: translucido ? '#000000aa' : '#e52521',
+    padding: { x: 16, y: 8 }
+  }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+  if (translucido) {
+    b.on('pointerover', () => b.setColor('#ffd54a'));
+    b.on('pointerout', () => b.setColor('#ffffff'));
+  }
+  b.on('pointerdown', accion);
+  return b;
+}
+
 /* ==================================================================
    ESCENA: ARRANQUE
    ================================================================== */
@@ -723,6 +819,7 @@ class Menu extends Phaser.Scene {
   constructor() { super('Menu'); }
 
   create() {
+    marcarEscena('menu');
     // Los colores dependen del tema, así que se regeneran aquí
     crearTexturasBase(this);
     crearTexturasNivel(this, NIVELES[0]);
@@ -743,60 +840,33 @@ class Menu extends Phaser.Scene {
     this.add.image(740, y0 - 130, 'volador');
 
     // Título
-    const estiloTitulo = {
-      fontFamily: FUENTE, fontSize: '60px', fontStyle: 'bold',
-      color: '#ffffff', stroke: '#000000', strokeThickness: 8
-    };
-    this.add.text(400, 70, 'CUADRO BROS', estiloTitulo).setOrigin(0.5);
-    this.add.text(400, 124, '5 niveles + jefe final', {
-      fontFamily: FUENTE, fontSize: '20px', fontStyle: 'bold',
-      color: '#ffffff', stroke: '#000000', strokeThickness: 5
-    }).setOrigin(0.5);
-    this.add.text(400, 154, 'Mejor puntaje: ' + String(guardado.mejor).padStart(6, '0'), {
-      fontFamily: FUENTE, fontSize: '16px', fontStyle: 'bold',
-      color: '#ffe066', stroke: '#000000', strokeThickness: 4
-    }).setOrigin(0.5);
+    this.add.text(400, 70, 'CUADRO BROS', estiloTexto(60, { strokeThickness: 8 })).setOrigin(0.5);
+    this.add.text(400, 124, '5 niveles + jefe final', estiloTexto(20, { strokeThickness: 5 })).setOrigin(0.5);
+    this.add.text(400, 154, 'Mejor puntaje: ' + String(guardado.mejor).padStart(6, '0'),
+      estiloTexto(16, { color: '#ffe066' })).setOrigin(0.5);
 
     // Botones
     let y = 205;
-    this.boton(y, '▶ JUGAR  (Enter)', () => this.nuevaPartida(0));
+    crearBotonTexto(this, y, '▶ JUGAR' + atajo('Enter'), () => this.nuevaPartida(0), true);
     y += 50;
     if (guardado.nivelMax > 0) {
       const etiqueta = guardado.nivelMax >= NIVELES.length - 1 ? 'JEFE FINAL' : 'NIVEL ' + (guardado.nivelMax + 1);
-      this.boton(y, '⏩ CONTINUAR: ' + etiqueta + '  (C)', () => this.nuevaPartida(guardado.nivelMax));
+      crearBotonTexto(this, y, '⏩ CONTINUAR: ' + etiqueta + atajo('C'), () => this.nuevaPartida(guardado.nivelMax), true);
       y += 50;
     }
-    this.boton(y, '🎨 TEMA: ' + TEMAS[tema].nombre + '  (T)', () => siguienteTema());
+    crearBotonTexto(this, y, '🎨 TEMA: ' + TEMAS[tema].nombre + atajo('T'), () => siguienteTema(), true);
 
-    // Ayuda de controles
-    this.add.text(400, ALTO_PANTALLA - 30,
-      'Mover: ← → / A D   Saltar: ↑ / W / Espacio   Pausa: P', {
-        fontFamily: FUENTE, fontSize: '14px', fontStyle: 'bold',
-        color: '#ffffff', stroke: '#000000', strokeThickness: 4
-      }).setOrigin(0.5);
+    // Ayuda de controles (solo con teclado)
+    if (!esDispositivoTactil()) {
+      this.add.text(400, ALTO_PANTALLA - 30,
+        'Mover: ← → / A D   Saltar: ↑ / W / Espacio   Pausa: P', estiloTexto(14)).setOrigin(0.5);
+    }
 
     // Teclado
     this.input.keyboard.on('keydown-ENTER', () => this.nuevaPartida(0));
     this.input.keyboard.on('keydown-SPACE', () => this.nuevaPartida(0));
     this.input.keyboard.on('keydown-C', () => { if (guardado.nivelMax > 0) this.nuevaPartida(guardado.nivelMax); });
     this.input.keyboard.on('keydown-T', () => siguienteTema());
-
-    // Mando: aviso al conectar
-    if (this.input.gamepad) {
-      this.input.gamepad.on('connected', () => mostrarAviso('🎮 Mando conectado'));
-    }
-  }
-
-  // Crea un botón de texto
-  boton(y, texto, accion) {
-    const b = this.add.text(400, y, texto, {
-      fontFamily: FUENTE, fontSize: '24px', fontStyle: 'bold', color: '#ffffff',
-      backgroundColor: '#000000aa', padding: { x: 16, y: 8 }
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    b.on('pointerover', () => b.setColor('#ffd54a'));
-    b.on('pointerout', () => b.setColor('#ffffff'));
-    b.on('pointerdown', accion);
-    return b;
   }
 
   nuevaPartida(nivel) {
@@ -880,15 +950,15 @@ class Juego extends Phaser.Scene {
     this.cursores = this.input.keyboard.createCursorKeys();
     this.teclas = this.input.keyboard.addKeys('W,A,S,D,SPACE');
 
-    // Interfaz (puntos, vidas, joystick virtual) en una escena paralela
+    // Interfaz (puntos, vidas, pausa) en una escena paralela
+    marcarEscena('juego');
     if (!this.scene.isActive('Interfaz')) this.scene.launch('Interfaz');
+    else this.scene.get('Interfaz').ocultarPausa();   // por si se reinició desde la pausa
 
     // Cartel de inicio del nivel
     const cartel = this.add.text(400, 160,
-      this.esJefe ? '¡JEFE FINAL!' : 'NIVEL ' + (this.indice + 1) + '\n' + def.nombre, {
-        fontFamily: FUENTE, fontSize: '40px', fontStyle: 'bold', align: 'center',
-        color: '#ffffff', stroke: '#000000', strokeThickness: 7
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(50);
+      this.esJefe ? '¡JEFE FINAL!' : 'NIVEL ' + (this.indice + 1) + '\n' + def.nombre,
+      estiloTexto(40, { align: 'center', strokeThickness: 7 })).setOrigin(0.5).setScrollFactor(0).setDepth(50);
     this.tweens.add({ targets: cartel, alpha: 0, delay: 1300, duration: 600, onComplete: () => cartel.destroy() });
   }
 
@@ -1250,10 +1320,7 @@ class Juego extends Phaser.Scene {
 
   sumarPuntos(n, x, y) {
     partida.puntos += n;
-    const tx = this.add.text(x, y, '+' + n, {
-      fontFamily: FUENTE, fontSize: '16px', fontStyle: 'bold',
-      color: '#ffffff', stroke: '#000000', strokeThickness: 4
-    }).setOrigin(0.5).setDepth(20);
+    const tx = this.add.text(x, y, '+' + n, estiloTexto(16)).setOrigin(0.5).setDepth(20);
     this.tweens.add({ targets: tx, y: y - 40, alpha: 0, duration: 700, onComplete: () => tx.destroy() });
   }
 
@@ -1473,10 +1540,8 @@ class Juego extends Phaser.Scene {
     this.tweens.add({ targets: j, x: this.poleX - 14, y: 12 * TAM, duration: 700 });
     this.tweens.add({ targets: this.bandera, y: 12 * TAM - 22, duration: 700 });
 
-    this.add.text(400, 150, '¡NIVEL COMPLETADO!', {
-      fontFamily: FUENTE, fontSize: '36px', fontStyle: 'bold',
-      color: '#ffffff', stroke: '#000000', strokeThickness: 7
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(50);
+    this.add.text(400, 150, '¡NIVEL COMPLETADO!', estiloTexto(36, { strokeThickness: 7 }))
+      .setOrigin(0.5).setScrollFactor(0).setDepth(50);
 
     guardarProgreso(Math.min(this.indice + 1, NIVELES.length - 1));
     this.time.delayedCall(2600, () => this.scene.start('Juego', { nivel: this.indice + 1 }));
@@ -1490,10 +1555,7 @@ class Interfaz extends Phaser.Scene {
   constructor() { super('Interfaz'); }
 
   create() {
-    const estilo = {
-      fontFamily: FUENTE, fontSize: '16px', fontStyle: 'bold',
-      color: '#ffffff', stroke: '#000000', strokeThickness: 4
-    };
+    const estilo = estiloTexto(16);
 
     // Marcadores
     this.tPuntos = this.add.text(12, 8, '', estilo);
@@ -1521,13 +1583,10 @@ class Interfaz extends Phaser.Scene {
     // Teclas de pausa y menú
     this.input.keyboard.on('keydown-P', () => this.alternarPausa());
     this.input.keyboard.on('keydown-ESC', () => this.alternarPausa());
-    this.input.keyboard.on('keydown-M', () => { if (this.scene.isPaused('Juego')) this.irAlMenu(); });
+    this.input.keyboard.on('keydown-M', () => { if (this.scene.isPaused('Juego')) irAlMenuPrincipal(); });
 
-    // Mando: aviso al conectar y botón Start para pausar
+    // Mando: el botón Start pausa (se lee en update)
     this.startPrev = false;
-    if (this.input.gamepad) {
-      this.input.gamepad.on('connected', () => mostrarAviso('🎮 Mando conectado'));
-    }
 
     // Pausa automática si la pestaña pasa a segundo plano
     this.alOcultar = () => {
@@ -1562,22 +1621,24 @@ class Interfaz extends Phaser.Scene {
 
   crearPanelPausa() {
     const fondo = this.add.rectangle(400, 224, 800, 448, 0x000000, 0.65);
-    const titulo = this.add.text(400, 150, 'PAUSA', {
-      fontFamily: FUENTE, fontSize: '48px', fontStyle: 'bold',
-      color: '#ffffff', stroke: '#000000', strokeThickness: 7
-    }).setOrigin(0.5);
+    const titulo = this.add.text(400, 150, 'PAUSA', estiloTexto(48, { strokeThickness: 7 })).setOrigin(0.5);
     const estiloBoton = {
       fontFamily: FUENTE, fontSize: '24px', fontStyle: 'bold', color: '#ffffff',
       backgroundColor: '#e52521', padding: { x: 16, y: 8 }
     };
-    const seguir = this.add.text(400, 235, 'CONTINUAR (P)', estiloBoton).setOrigin(0.5)
+    const seguir = this.add.text(400, 235, 'CONTINUAR' + atajo('P'), estiloBoton).setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
-    const menu = this.add.text(400, 295, 'MENÚ (M)', estiloBoton).setOrigin(0.5)
+    const menu = this.add.text(400, 295, 'MENÚ' + atajo('M'), estiloBoton).setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     seguir.on('pointerdown', () => this.alternarPausa());
-    menu.on('pointerdown', () => this.irAlMenu());
+    menu.on('pointerdown', () => irAlMenuPrincipal());
 
     this.panel = this.add.container(0, 0, [fondo, titulo, seguir, menu]).setDepth(100).setVisible(false);
+  }
+
+  // Oculta el panel de pausa (se usa al reiniciar el nivel desde la pausa)
+  ocultarPausa() {
+    if (this.panel) this.panel.setVisible(false);
   }
 
   alternarPausa() {
@@ -1588,12 +1649,6 @@ class Interfaz extends Phaser.Scene {
       this.scene.pause('Juego');
       this.panel.setVisible(true);
     }
-  }
-
-  irAlMenu() {
-    this.scene.stop('Juego');
-    this.scene.start('Menu');
-    this.scene.stop();
   }
 
   /* ---------- Actualización del HUD ---------- */
@@ -1640,18 +1695,13 @@ class Fin extends Phaser.Scene {
   }
 
   create() {
+    marcarEscena('fin');
     const tema = guardado.tema;
     this.cameras.main.setBackgroundColor(
       this.ganado ? ajustar(tema, 'cielo', NIVELES[0].cielo) : 0x000000);
 
-    const grande = {
-      fontFamily: FUENTE, fontSize: '48px', fontStyle: 'bold', align: 'center',
-      color: '#ffffff', stroke: '#000000', strokeThickness: 8
-    };
-    const medio = {
-      fontFamily: FUENTE, fontSize: '22px', fontStyle: 'bold',
-      color: '#ffe066', stroke: '#000000', strokeThickness: 5
-    };
+    const grande = estiloTexto(48, { align: 'center', strokeThickness: 8 });
+    const medio = estiloTexto(22, { color: '#ffe066', strokeThickness: 5 });
 
     if (this.ganado) {
       // Lluvia de confeti de cuadrados
@@ -1675,20 +1725,11 @@ class Fin extends Phaser.Scene {
 
     // Botones
     const etiqueta = this.ganado ? '▶ JUGAR DE NUEVO' : '▶ REINTENTAR NIVEL ' + (this.nivelPerdido + 1);
-    this.boton(310, etiqueta + '  (Enter)', () => this.reintentar());
-    this.boton(365, 'MENÚ  (M)', () => this.scene.start('Menu'));
+    crearBotonTexto(this, 310, etiqueta + atajo('Enter'), () => this.reintentar(), false);
+    crearBotonTexto(this, 365, 'MENÚ' + atajo('M'), () => this.scene.start('Menu'), false);
 
     this.input.keyboard.on('keydown-ENTER', () => this.reintentar());
     this.input.keyboard.on('keydown-M', () => this.scene.start('Menu'));
-  }
-
-  boton(y, texto, accion) {
-    const b = this.add.text(400, y, texto, {
-      fontFamily: FUENTE, fontSize: '22px', fontStyle: 'bold', color: '#ffffff',
-      backgroundColor: '#e52521', padding: { x: 16, y: 8 }
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    b.on('pointerdown', accion);
-    return b;
   }
 
   reintentar() {
@@ -1782,18 +1823,33 @@ function iniciar() {
   aplicarTemaPagina();
   bloquearSeleccion();
   bloquearZoom();
+  vigilarMandos();
   configurarControlesTactiles();
+  marcarEscena('menu');
 
-  // Botones de la barra superior
-  const btnCompartir = document.getElementById('btn-compartir');
-  const btnTema = document.getElementById('btn-tema');
-  const btnAcercar = document.getElementById('btn-acercar');
-  const btnAlejar = document.getElementById('btn-alejar');
+  // Botones de la barra superior: id -> acción
+  const acciones = {
+    'btn-compartir': compartir,
+    'btn-tema': siguienteTema,
+    'btn-acercar': () => cambiarZoom(ZOOM_PASO),
+    'btn-alejar': () => cambiarZoom(-ZOOM_PASO),
+    'btn-menu': irAlMenuPrincipal,
+    'btn-reiniciar': reiniciarNivelActual
+  };
+  Object.keys(acciones).forEach((id) => {
+    const boton = document.getElementById(id);
+    if (!boton) return;
+    boton.addEventListener('click', () => {
+      acciones[id]();
+      // Sin foco: así Espacio o Enter no vuelven a pulsar el botón mientras se juega
+      boton.blur();
+    });
+  });
 
-  if (btnCompartir) btnCompartir.addEventListener('click', compartir);
-  if (btnTema) btnTema.addEventListener('click', siguienteTema);
-  if (btnAcercar) btnAcercar.addEventListener('click', () => cambiarZoom(ZOOM_PASO));
-  if (btnAlejar) btnAlejar.addEventListener('click', () => cambiarZoom(-ZOOM_PASO));
+  // El audio solo puede iniciarse tras un gesto del usuario (iOS / Chrome)
+  ['pointerdown', 'keydown'].forEach((ev) => {
+    window.addEventListener(ev, prepararAudio, { once: true });
+  });
 
   juego = new Phaser.Game({
     type: Phaser.AUTO,

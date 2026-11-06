@@ -48,24 +48,33 @@
 html,
 body {
   margin: 0;
+  width: 100%;
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  /* Sin zoom por doble toque y sin que iOS agrande el texto al girar */
-  touch-action: manipulation;
+  /* "none" bloquea el pellizco y el doble toque (zoom). Con "manipulation"
+     el pellizco para acercar seguía funcionando. La página no se desplaza,
+     así que no se pierde nada. */
+  touch-action: none;
+  /* Evita que iOS y Android agranden el texto al girar el dispositivo */
   -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
   text-size-adjust: 100%;
   background: var(--fondo);
   color: var(--texto);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-/* Columna: barra, juego y pie de página */
+/* Columna: barra, juego y pie de página. Queda fija para que el navegador
+   no pueda desplazarla ni "estirarla" (rebote de iOS). */
 body {
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
+  /* Márgenes seguros: muescas y barras de gestos del celular */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* Barra superior */
@@ -109,6 +118,22 @@ button:focus-visible {
   filter: brightness(1.15);
   outline: 2px solid var(--texto);
   outline-offset: 2px;
+}
+
+/* Botón no disponible (por ejemplo, Reiniciar en el menú principal) */
+button:disabled {
+  opacity: 0.4;
+  filter: none;
+  cursor: not-allowed;
+}
+
+/* Botones de la barra: Menú y Reiniciar quedan al extremo derecho (computador) */
+.flotantes {
+  display: flex;
+  gap: 8px;
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--acento);
 }
 
 /* Escenario: joystick a la izquierda, juego al centro, salto a la derecha */
@@ -235,6 +260,61 @@ body.tactil .zona-tactil {
   }
 }
 
+/* ------------------------------------------------------------
+   Celular o pantalla táctil (la clase "tactil" la añade index.js)
+   La barra solo muestra iconos y Menú / Reiniciar pasan a ser
+   botones virtuales flotantes en la parte superior de la pantalla.
+   ------------------------------------------------------------ */
+body.tactil .barra {
+  min-height: 48px;
+}
+
+body.tactil .texto {
+  display: none;
+}
+
+body.tactil .acciones > button {
+  min-width: 40px;
+  min-height: 36px;
+  padding: 4px 8px;
+}
+
+body.tactil .flotantes {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+body.tactil .flotantes button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.25rem;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+}
+
+/* Pantallas angostas (celular en vertical): se oculta el título y el zoom
+   de cámara para que quepan los botones flotantes al centro */
+@media (max-width: 640px) {
+  body.tactil .barra {
+    justify-content: flex-end;
+  }
+
+  body.tactil .barra h1,
+  body.tactil .btn-zoom {
+    display: none;
+  }
+}
+
 /* Mensajes breves */
 #toast {
   position: fixed;
@@ -300,6 +380,10 @@ footer a:focus-visible {
   button {
     padding: 3px 8px;
     font-size: 0.8rem;
+  }
+
+  body.tactil .barra {
+    min-height: 48px;
   }
 
   footer {

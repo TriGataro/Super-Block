@@ -2,8 +2,10 @@
 <html lang="es" data-tema="clasico">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <!-- Sin zoom: escala fija (iOS y algunos Android lo refuerzan con código en index.js) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="Cuadro Bros: juego de plataformas con cuadrados de colores, 5 niveles y un jefe final.">
+  <meta name="theme-color" content="#12194d">
   <title>Cuadro Bros</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -13,10 +15,16 @@
   <header class="barra">
     <h1>Cuadro Bros</h1>
     <div class="acciones">
-      <button id="btn-alejar" type="button" aria-label="Alejar la pantalla" title="Alejar">🔍−</button>
-      <button id="btn-acercar" type="button" aria-label="Acercar la pantalla" title="Acercar">🔍+</button>
-      <button id="btn-tema" type="button" aria-label="Cambiar el tema del juego">🎨 Tema</button>
-      <button id="btn-compartir" type="button" aria-label="Compartir el juego">🔗 Compartir</button>
+      <button id="btn-alejar" class="btn-zoom" type="button" aria-label="Alejar la cámara del juego" title="Alejar">🔍−</button>
+      <button id="btn-acercar" class="btn-zoom" type="button" aria-label="Acercar la cámara del juego" title="Acercar">🔍+</button>
+      <button id="btn-tema" type="button" aria-label="Cambiar el tema de colores" title="Tema">🎨<span class="texto"> Tema</span></button>
+      <button id="btn-compartir" type="button" aria-label="Compartir el juego" title="Compartir">🔗<span class="texto"> Compartir</span></button>
+
+      <!-- Menú y Reiniciar: arriba a la derecha en computador y flotantes arriba en celular -->
+      <div id="botones-flotantes" class="flotantes">
+        <button id="btn-menu" type="button" aria-label="Volver al menú" title="Menú">☰<span class="texto"> Menú</span></button>
+        <button id="btn-reiniciar" type="button" aria-label="Reiniciar el nivel" title="Reiniciar">↻<span class="texto"> Reiniciar</span></button>
+      </div>
     </div>
   </header>
 
